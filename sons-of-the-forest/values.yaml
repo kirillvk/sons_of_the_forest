@@ -1,0 +1,156 @@
+# Default values for sons-of-the-forest.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This sets the container image, see: https://hub.docker.com/r/jammsen/sons-of-the-forest-dedicated-server
+image:
+  repository: jammsen/sons-of-the-forest-dedicated-server
+  # This sets the pull policy for images.
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+# This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
+# This is to override the chart name.
+nameOverride: ""
+fullnameOverride: ""
+
+# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# This is for setting Kubernetes Annotations to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+podAnnotations: {}
+# This is for setting Kubernetes Labels to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+podLabels: {}
+
+# NOTE: The container's entrypoint must start as root (it chowns the game/wine
+# data directories and then de-escalates to PUID/PGID via gosu). Do not set
+# runAsNonRoot/runAsUser here, and don't run this chart under a restricted
+# (non-root-permitting) Pod Security Standard.
+podSecurityContext: {}
+  # fsGroup: 1000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+
+# Environment variables passed to the container, see:
+# https://github.com/jammsen/docker-sons-of-the-forest-dedicated-server#docker-compose---example
+env:
+  PUID: "1000"
+  PGID: "1000"
+  TIMEZONE: "Europe/Berlin"
+  ALWAYS_UPDATE_ON_START: "true"
+  SKIP_NETWORK_ACCESSIBILITY_TEST: "true"
+  FILTER_SHADER_AND_MESH_AND_WINE_DEBUG: "true"
+
+# Additional arbitrary environment variables (list form, e.g. for Secret/ConfigMap refs).
+extraEnv: []
+# - name: FOO
+#   value: "bar"
+
+# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+service:
+  # Game servers are usually exposed directly to players, e.g. via LoadBalancer or NodePort.
+  type: LoadBalancer
+  # UDP ports used by the dedicated server, see:
+  # https://github.com/jammsen/docker-sons-of-the-forest-dedicated-server
+  ports:
+    game: 8766
+    query: 27016
+    blobSync: 9700
+  # Only used when service.type is NodePort, sets fixed node ports for each of the ports above.
+  nodePorts:
+    game: ""
+    query: ""
+    blobSync: ""
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # Minimum system requirements per upstream project: 2-4 CPU cores, 8GB+ RAM.
+  # limits:
+  #   cpu: "4"
+  #   memory: 16Gi
+  # requests:
+  #   cpu: "2"
+  #   memory: 8Gi
+
+# Persistent storage for the gameserver install, savegames and wine prefix (mounted at /sonsoftheforest).
+persistence:
+  enabled: true
+  # Use an existing PersistentVolumeClaim instead of creating one.
+  existingClaim: ""
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 20Gi
+  annotations: {}
+
+# The upstream image ships a Docker HEALTHCHECK based on `pgrep` for the game process;
+# these probes mirror that same check for Kubernetes.
+startupProbe:
+  exec:
+    command:
+      - pgrep
+      - -f
+      - "[Z]:.*SonsOfTheForestDS.exe"
+  # SteamCMD installing/updating the ~10GB+ server on first start can take a long time.
+  periodSeconds: 30
+  failureThreshold: 120
+  timeoutSeconds: 10
+
+livenessProbe:
+  exec:
+    command:
+      - pgrep
+      - -f
+      - "[Z]:.*SonsOfTheForestDS.exe"
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  exec:
+    command:
+      - pgrep
+      - -f
+      - "[Z]:.*SonsOfTheForestDS.exe"
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+# Additional volumes on the output Deployment definition.
+volumes: []
+# - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# Additional volumeMounts on the output Deployment definition.
+volumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

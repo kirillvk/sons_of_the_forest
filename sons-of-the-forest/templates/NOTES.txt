@@ -1,0 +1,28 @@
+Sons of the Forest dedicated server is being deployed.
+
+1. Get the address to connect to (via in-game "Direct Connect", using the Game port):
+{{- if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[?(@.name=='game')].nodePort}" services {{ include "sons-of-the-forest.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "$NODE_IP:$NODE_PORT"
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch its status by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "sons-of-the-forest.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "sons-of-the-forest.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo "$SERVICE_IP:{{ .Values.service.ports.game }}"
+{{- else }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sons-of-the-forest.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8766:{{ .Values.service.ports.game }}/udp {{ .Values.service.ports.query }}:{{ .Values.service.ports.query }}/udp {{ .Values.service.ports.blobSync }}:{{ .Values.service.ports.blobSync }}/udp
+  echo "127.0.0.1:8766"
+{{- end }}
+
+2. Remember to also forward/open the Query ({{ .Values.service.ports.query }}/udp) and BlobSync ({{ .Values.service.ports.blobSync }}/udp) ports to callers on your network/firewall in front of this service.
+
+3. The gameserver installs, updates and stores savegames on the persistent volume mounted at
+   /sonsoftheforest inside the pod. Advanced settings not covered by this chart's values (e.g.
+   ServerName, MaxPlayers, Password) can be edited directly in that volume's
+   userdata/dedicatedserver.cfg after the first start, then restart the pod, e.g.:
+   kubectl --namespace {{ .Release.Namespace }} exec -it deploy/{{ include "sons-of-the-forest.fullname" . }} -- sh
+
+4. First start will download the ~10GB+ dedicated server via SteamCMD - check progress with:
+   kubectl --namespace {{ .Release.Namespace }} logs -f deploy/{{ include "sons-of-the-forest.fullname" . }}
