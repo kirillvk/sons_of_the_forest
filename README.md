@@ -50,8 +50,9 @@ Common settings to override via `--set` or a values file:
 | `env.PUID` / `env.PGID` | Host uid/gid the process runs as after startup | `1000` / `1000` |
 | `env.TIMEZONE` | Container timezone | `Europe/Berlin` |
 | `env.ALWAYS_UPDATE_ON_START` | Run a SteamCMD update on every pod start | `true` |
-| `service.type` | `LoadBalancer`, `NodePort`, or `ClusterIP` | `LoadBalancer` |
+| `service.type` | `LoadBalancer` or `ClusterIP` | `LoadBalancer` |
 | `service.ports.game` / `.query` / `.blobSync` | UDP ports (`GamePort`/`QueryPort`/`BlobSyncPort`) | `8766` / `27016` / `9700` |
+| `service.loadBalancerIP` | Pin a specific IP when `service.type` is `LoadBalancer` (e.g. a MetalLB address) | `""` (auto-assigned) |
 | `paths.gamePath` / `.userDataDir` | Where the game is installed / its userdata subdirectory; also set as the `GAME_PATH`/`GAME_USERDATA_PATH`/`GAME_CONFIGFILE_PATH` env vars so the volume mount and the server always agree | `/sonsoftheforest` / `userdata` |
 | `persistence.enabled` / `.size` / `.storageClassName` | Storage for `paths.gamePath` | `true` / `20Gi` / `""` |
 | `persistence.existingClaim` | Reuse an existing PVC instead of creating one | `""` |

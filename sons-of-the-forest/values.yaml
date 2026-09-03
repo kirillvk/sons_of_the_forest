@@ -65,7 +65,7 @@ extraEnv: []
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
-  # Game servers are usually exposed directly to players, e.g. via LoadBalancer or NodePort.
+  # Game servers are usually exposed directly to players, e.g. via LoadBalancer.
   type: LoadBalancer
   # UDP ports used by the dedicated server, see:
   # https://github.com/jammsen/docker-sons-of-the-forest-dedicated-server
@@ -73,11 +73,9 @@ service:
     game: 8766
     query: 27016
     blobSync: 9700
-  # Only used when service.type is NodePort, sets fixed node ports for each of the ports above.
-  nodePorts:
-    game: ""
-    query: ""
-    blobSync: ""
+  # Only used when service.type is LoadBalancer. Requests a specific IP from the
+  # cloud/MetalLB provider instead of an auto-assigned one. Leave empty to auto-assign.
+  loadBalancerIP: ""
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
