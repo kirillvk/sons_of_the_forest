@@ -52,7 +52,8 @@ Common settings to override via `--set` or a values file:
 | `env.ALWAYS_UPDATE_ON_START` | Run a SteamCMD update on every pod start | `true` |
 | `service.type` | `LoadBalancer`, `NodePort`, or `ClusterIP` | `LoadBalancer` |
 | `service.ports.game` / `.query` / `.blobSync` | UDP ports (`GamePort`/`QueryPort`/`BlobSyncPort`) | `8766` / `27016` / `9700` |
-| `persistence.enabled` / `.size` / `.storageClassName` | Storage for `/sonsoftheforest` | `true` / `20Gi` / `""` |
+| `paths.gamePath` / `.userDataDir` | Where the game is installed / its userdata subdirectory; also set as the `GAME_PATH`/`GAME_USERDATA_PATH`/`GAME_CONFIGFILE_PATH` env vars so the volume mount and the server always agree | `/sonsoftheforest` / `userdata` |
+| `persistence.enabled` / `.size` / `.storageClassName` | Storage for `paths.gamePath` | `true` / `20Gi` / `""` |
 | `persistence.existingClaim` | Reuse an existing PVC instead of creating one | `""` |
 | `resources` | Pod resource requests/limits | `{}` (unset) |
 
@@ -61,15 +62,37 @@ See [`values.yaml`](values.yaml) for the full list, including probe tuning, `ext
 
 ### Per-server settings (name, password, max players, ...)
 
-Settings such as `ServerName`, `MaxPlayers`, `Password`, `GameMode`, etc. are not exposed as chart
-values — the image only generates `userdata/dedicatedserver.cfg` on first install and otherwise
-leaves it alone (so in-game changes aren't clobbered on restart). Edit it directly on the
-persistent volume after the first start, then restart the pod:
+By default, `ServerName`, `MaxPlayers`, `Password`, `GameMode`, etc. are not exposed as chart
+values — the image only generates `userdata/dedicatedserver.cfg` (and `userdata/ownerswhitelist.txt`,
+the owner/admin SteamID whitelist) on first install, and otherwise leaves them alone. Edit them
+directly on the persistent volume after the first start, then restart the pod:
 
 ```console
 kubectl exec -it deploy/sotf-sons-of-the-forest -- vi /sonsoftheforest/userdata/dedicatedserver.cfg
 kubectl rollout restart deploy/sotf-sons-of-the-forest
 ```
+
+Alternatively, set `setup.enabled: true` to manage `dedicatedserver.cfg`,
+`ownerswhitelist.txt`, and `steam_appid.txt` from chart values instead. An initContainer syncs two
+ConfigMaps onto the volume **on every pod (re)start** — one mounted as `paths.userDataDir`
+(`dedicatedserver.cfg`, `ownerswhitelist.txt`) and one mounted as the `paths.gamePath` root
+(`steam_appid.txt`) — overwriting a file whenever it's missing or differs from its ConfigMap:
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `setup.enabled` | Sync the files below from two ConfigMaps on every pod start | `false` |
+| `setup.serverConfig` | Map of config keys (`ServerName`, `MaxPlayers`, `Password`, `GameMode`, ...) rendered to `dedicatedserver.cfg` (JSON) | see `values.yaml` |
+| `setup.ownerSteamIds` | List of SteamIDs rendered to `ownerswhitelist.txt`, one per line | `[]` |
+| `setup.steamAppId` | Content of `steam_appid.txt` (shouldn't normally need changing) | `"1326470"` |
+| `setup.existingUserDataConfigMap` | Use an existing ConfigMap (keys `dedicatedserver.cfg`, `ownerswhitelist.txt`) instead of templating one | `""` |
+| `setup.existingGameDirConfigMap` | Use an existing ConfigMap (key `steam_appid.txt`) instead of templating one | `""` |
+| `setup.image` | Image used for the sync initContainer | `busybox:1.36` |
+
+`IpAddress`, `GamePort`, `QueryPort`, and `BlobSyncPort` in the rendered `dedicatedserver.cfg` are
+always derived from `service.ports` and can't be overridden via `setup.serverConfig`.
+
+**Once `setup.enabled` is `true`, don't hand-edit these files in-game or on the volume** —
+the next pod restart will detect the difference from the ConfigMap and overwrite them.
 
 ## Notes
 

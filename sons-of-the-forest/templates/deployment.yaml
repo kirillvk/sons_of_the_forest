@@ -33,6 +33,49 @@ spec:
       serviceAccountName: {{ include "sons-of-the-forest.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.setup.enabled }}
+      initContainers:
+        # Mirrors every file under each mounted ConfigMap directory onto its matching destination
+        # directory, overwriting a file if it doesn't exist yet or differs from the ConfigMap.
+        # This runs on every pod (re)start, so the volume is kept in sync with the setup
+        # values rather than only seeded once. Iterates whatever files are mounted instead of a
+        # hardcoded file list.
+        - name: sync-server-config
+          image: "{{ .Values.setup.image.repository }}:{{ .Values.setup.image.tag }}"
+          imagePullPolicy: {{ .Values.setup.image.pullPolicy }}
+          env:
+            - name: GAME_PATH
+              value: {{ .Values.paths.gamePath | quote }}
+            - name: GAME_USERDATA_PATH
+              value: {{ include "sons-of-the-forest.userDataPath" . | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              sync_dir() {
+                srcdir="$1"; dstdir="$2"
+                mkdir -p "$dstdir"
+                find -L "$srcdir" -type f -not -path '*/..*' | while read -r src; do
+                  dst="$dstdir/$(basename "$src")"
+                  if [ ! -f "$dst" ] || ! cmp -s "$src" "$dst"; then
+                    echo "syncing $dst"
+                    cp -f "$src" "$dst"
+                  fi
+                done
+              }
+              sync_dir /config-seed/gamedir "$GAME_PATH"
+              sync_dir /config-seed/userdata "$GAME_USERDATA_PATH"
+          volumeMounts:
+            - name: game-data
+              mountPath: {{ .Values.paths.gamePath }}
+            - name: gamedir-config-seed
+              mountPath: /config-seed/gamedir
+              readOnly: true
+            - name: userdata-config-seed
+              mountPath: /config-seed/userdata
+              readOnly: true
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -40,6 +83,12 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            - name: GAME_PATH
+              value: {{ .Values.paths.gamePath | quote }}
+            - name: GAME_USERDATA_PATH
+              value: {{ include "sons-of-the-forest.userDataPath" . | quote }}
+            - name: GAME_CONFIGFILE_PATH
+              value: {{ include "sons-of-the-forest.configFilePath" . | quote }}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
@@ -73,7 +122,7 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: game-data
-              mountPath: /sonsoftheforest
+              mountPath: {{ .Values.paths.gamePath }}
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -85,6 +134,14 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- if .Values.setup.enabled }}
+        - name: gamedir-config-seed
+          configMap:
+            name: {{ include "sons-of-the-forest.gameDirConfigMapName" . }}
+        - name: userdata-config-seed
+          configMap:
+            name: {{ include "sons-of-the-forest.userDataConfigMapName" . }}
+        {{- end }}
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

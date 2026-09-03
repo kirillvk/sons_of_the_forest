@@ -1,0 +1,11 @@
+{{- if and .Values.setup.enabled (not .Values.setup.existingGameDirConfigMap) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sons-of-the-forest.gameDirConfigMapName" . }}
+  labels:
+    {{- include "sons-of-the-forest.labels" . | nindent 4 }}
+data:
+  steam_appid.txt: |
+    {{ .Values.setup.steamAppId }}
+{{- end }}

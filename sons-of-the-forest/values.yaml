@@ -92,7 +92,18 @@ resources: {}
   #   cpu: "2"
   #   memory: 8Gi
 
-# Persistent storage for the gameserver install, savegames and wine prefix (mounted at /sonsoftheforest).
+# Paths inside the container, matching the image's own GAME_PATH/GAME_USERDATA_PATH/
+# GAME_CONFIGFILE_PATH defaults (see the Dockerfile in
+# jammsen/docker-sons-of-the-forest-dedicated-server). These are also set as env vars on the
+# container (below), so the persistent volume mount, the setup initContainer, and the running
+# game server always agree on where things live - change gamePath here rather than overriding
+# GAME_PATH via env/extraEnv directly.
+paths:
+  gamePath: /sonsoftheforest
+  # Subdirectory of gamePath holding userdata (dedicatedserver.cfg, ownerswhitelist.txt, ...).
+  userDataDir: userdata
+
+# Persistent storage for the gameserver install, savegames and wine prefix (mounted at paths.gamePath).
 persistence:
   enabled: true
   # Use an existing PersistentVolumeClaim instead of creating one.
@@ -154,3 +165,59 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+# Controls the initContainer(s) that perform one-off setup tasks, keeping the SOTF config files in
+# sync from ConfigMaps instead of relying on the image to generate them on first install. Unlike a
+# first-install-only seed, this re-syncs on every pod (re)start: if a file on the volume differs
+# from what's rendered here, it gets OVERWRITTEN. So once enabled, manage these files via values
+# only - don't hand-edit them in-game or directly on the volume, since the next restart will
+# discard those changes.
+setup:
+  enabled: false
+  image:
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+
+  # Use an existing ConfigMap instead of templating one from serverConfig/ownerSteamIds below. Its
+  # keys are mounted as files directly under paths.userDataDir, so it must contain
+  # "dedicatedserver.cfg" and "ownerswhitelist.txt".
+  existingUserDataConfigMap: ""
+
+  # Use an existing ConfigMap instead of templating one from steamAppId below. Its keys are
+  # mounted as files directly under paths.gamePath, so it must contain "steam_appid.txt".
+  existingGameDirConfigMap: ""
+
+  # Content of steam_appid.txt at the root of the game install (paths.gamePath). You shouldn't
+  # need to change this - it's the Steamworks app id the bundled image ships in
+  # https://github.com/jammsen/docker-sons-of-the-forest-dedicated-server/blob/master/configs/steam_appid.txt
+  steamAppId: "1326470"
+
+  # Rendered to userdata/dedicatedserver.cfg (JSON). IpAddress/GamePort/QueryPort/BlobSyncPort are
+  # always taken from service.ports (above) and cannot be overridden here. ServerName defaults to
+  # the release's fullname when left empty. Override individual keys via --set or a values file,
+  # e.g. --set setup.serverConfig.MaxPlayers=10
+  # See: https://github.com/jammsen/docker-sons-of-the-forest-dedicated-server/blob/master/configs/dedicatedserver.cfg.example
+  serverConfig:
+    ServerName: ""
+    MaxPlayers: 8
+    Password: ""
+    LanOnly: false
+    SaveSlot: 1
+    SaveMode: "Continue"
+    GameMode: "Normal"
+    SaveInterval: 600
+    IdleDayCycleSpeed: 0.0
+    IdleTargetFramerate: 5
+    ActiveTargetFramerate: 60
+    LogFilesEnabled: false
+    TimestampLogFilenames: true
+    TimestampLogEntries: true
+    SkipNetworkAccessibilityTest: true
+    GameSettings: {}
+    CustomGameModeSettings: {}
+
+  # Rendered to userdata/ownerswhitelist.txt: SteamIDs allowed to administrate the server in-game.
+  # See: https://github.com/jammsen/docker-sons-of-the-forest-dedicated-server/blob/master/configs/ownerswhitelist.txt.example
+  ownerSteamIds: []
+  # - "76561198000000000"

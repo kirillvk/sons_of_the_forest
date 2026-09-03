@@ -60,3 +60,31 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Name of the ConfigMap providing the contents of paths.userDataDir (dedicatedserver.cfg, ownerswhitelist.txt)
+*/}}
+{{- define "sons-of-the-forest.userDataConfigMapName" -}}
+{{- .Values.setup.existingUserDataConfigMap | default (printf "%s-userdata-config" (include "sons-of-the-forest.fullname" .)) }}
+{{- end }}
+
+{{/*
+Name of the ConfigMap providing the contents of paths.gamePath's root (steam_appid.txt)
+*/}}
+{{- define "sons-of-the-forest.gameDirConfigMapName" -}}
+{{- .Values.setup.existingGameDirConfigMap | default (printf "%s-gamedir-config" (include "sons-of-the-forest.fullname" .)) }}
+{{- end }}
+
+{{/*
+Absolute path to the game userdata directory (GAME_USERDATA_PATH)
+*/}}
+{{- define "sons-of-the-forest.userDataPath" -}}
+{{- printf "%s/%s" .Values.paths.gamePath .Values.paths.userDataDir }}
+{{- end }}
+
+{{/*
+Absolute path to dedicatedserver.cfg (GAME_CONFIGFILE_PATH)
+*/}}
+{{- define "sons-of-the-forest.configFilePath" -}}
+{{- printf "%s/dedicatedserver.cfg" (include "sons-of-the-forest.userDataPath" .) }}
+{{- end }}

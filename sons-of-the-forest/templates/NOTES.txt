@@ -19,10 +19,15 @@ Sons of the Forest dedicated server is being deployed.
 2. Remember to also forward/open the Query ({{ .Values.service.ports.query }}/udp) and BlobSync ({{ .Values.service.ports.blobSync }}/udp) ports to callers on your network/firewall in front of this service.
 
 3. The gameserver installs, updates and stores savegames on the persistent volume mounted at
-   /sonsoftheforest inside the pod. Advanced settings not covered by this chart's values (e.g.
+   {{ .Values.paths.gamePath }} inside the pod. Settings not covered by this chart's values (e.g.
    ServerName, MaxPlayers, Password) can be edited directly in that volume's
-   userdata/dedicatedserver.cfg after the first start, then restart the pod, e.g.:
+   {{ .Values.paths.userDataDir }}/dedicatedserver.cfg and {{ .Values.paths.userDataDir }}/ownerswhitelist.txt,
+   then restart the pod:
    kubectl --namespace {{ .Release.Namespace }} exec -it deploy/{{ include "sons-of-the-forest.fullname" . }} -- sh
+{{- if .Values.setup.enabled }}
+   NOTE: setup.enabled is true, so these files are synced from a ConfigMap on every pod restart -
+   manual/in-game edits will be overwritten. Change setup values instead.
+{{- end }}
 
 4. First start will download the ~10GB+ dedicated server via SteamCMD - check progress with:
    kubectl --namespace {{ .Release.Namespace }} logs -f deploy/{{ include "sons-of-the-forest.fullname" . }}

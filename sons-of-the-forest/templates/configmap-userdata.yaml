@@ -1,0 +1,24 @@
+{{- if and .Values.setup.enabled (not .Values.setup.existingUserDataConfigMap) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sons-of-the-forest.userDataConfigMapName" . }}
+  labels:
+    {{- include "sons-of-the-forest.labels" . | nindent 4 }}
+data:
+  dedicatedserver.cfg: |
+    {{- $cfg := deepCopy .Values.setup.serverConfig }}
+    {{- $_ := set $cfg "IpAddress" "0.0.0.0" }}
+    {{- $_ := set $cfg "GamePort" (int .Values.service.ports.game) }}
+    {{- $_ := set $cfg "QueryPort" (int .Values.service.ports.query) }}
+    {{- $_ := set $cfg "BlobSyncPort" (int .Values.service.ports.blobSync) }}
+    {{- if not $cfg.ServerName }}
+    {{- $_ := set $cfg "ServerName" (include "sons-of-the-forest.fullname" .) }}
+    {{- end }}
+    {{- toPrettyJson $cfg | nindent 4 }}
+  ownerswhitelist.txt: |
+    # Managed by Helm. SteamIDs of server owners/admins, one per line.
+    {{- range .Values.setup.ownerSteamIds }}
+    {{ . }}
+    {{- end }}
+{{- end }}
