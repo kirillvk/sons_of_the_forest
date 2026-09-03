@@ -97,6 +97,47 @@ always derived from `service.ports` and can't be overridden via `setup.serverCon
 **Once `setup.enabled` is `true`, don't hand-edit these files in-game or on the volume** —
 the next pod restart will detect the difference from the ConfigMap and overwrite them.
 
+## Known issue: LAN clients and `service.type: LoadBalancer`
+
+If you run this behind a `LoadBalancer` Service (e.g. a MetalLB VIP) and LAN clients get
+**"Game server not found"** on the game's Direct Connect screen — even though the VIP is fully
+reachable over raw UDP — this is a known SOTF client quirk, not a bug in the chart, Kubernetes, or
+MetalLB.
+
+What we confirmed by packet-capturing both a LAN client and the node during a real deployment
+(MetalLB L2 mode, single-node k3s):
+
+- Raw UDP sent to the VIP's `game`/`query`/`blobSync` ports traverses MetalLB's ARP announcement
+  and iptables DNAT and lands in the pod correctly — verified end to end with a manual
+  `System.Net.Sockets.UdpClient.Send()` from the client plus `tcpdump` on the node and on the
+  pod's network namespace. The network path is not the problem.
+- The actual game client's "Direct Connect" to that same VIP produced **zero** outbound packets
+  from the client machine during the same capture window — it never even attempted to open a
+  socket to the address entered.
+
+That's consistent with reports elsewhere that the SOTF client's LAN discovery doesn't unicast its
+server-info query to the address you type when it's an RFC1918/private address — instead it
+broadcasts to `255.255.255.255` on the query port, and reportedly only unicasts directly to a
+public/WAN-routable address. We haven't independently packet-captured that broadcast ourselves,
+but it fits what we saw: a `LoadBalancer`/MetalLB VIP is a virtual address answered only via ARP
+proxying, not a real host that receives LAN broadcast traffic, so it would never see that query no
+matter how reachable it is by direct unicast — while a Docker container published with
+`--network host` on an actual LAN host would.
+
+**Fix**: set `hostNetwork: true` (and switch `service.type` to `ClusterIP`, since the ports are
+now already exposed on the node — a `LoadBalancer` VIP alongside `hostNetwork` would just
+reintroduce the same problem for anyone who connects to the VIP instead of the node). This binds
+the game ports directly to the node's real LAN IP, the same way `docker run --network host` is
+reachable, so a LAN client's broadcast-to-`255.255.255.255` reaches an actual host on the wire.
+You lose the "movable"/multi-node LoadBalancer-IP abstraction, but keep everything else this chart
+gives you (PVC, ConfigMaps, restart policy, GitOps, etc.) — and on a single-node cluster there was
+nothing to move anyway.
+
+If this server only needs to be reachable from outside your LAN (e.g. port-forwarded to a WAN IP),
+`service.type: LoadBalancer` without `hostNetwork` may be sufficient, since a direct-unicast query
+to a public IP was reported to behave differently from the LAN broadcast case above — we haven't
+verified that ourselves.
+
 ## Notes
 
 - **Single instance only**: the chart is a `Deployment` pinned to `replicaCount: 1` with a
