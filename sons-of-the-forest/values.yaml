@@ -77,6 +77,22 @@ service:
   # cloud/MetalLB provider instead of an auto-assigned one. Leave empty to auto-assign.
   loadBalancerIP: ""
 
+# Run the pod in the host's network namespace instead of a pod IP, binding service.ports
+# directly on the node. The SOTF client's LAN "Direct Connect" doesn't unicast its query to
+# whatever IP you type in - for RFC1918 addresses it broadcasts to 255.255.255.255, which only
+# an actual LAN host answers. A LoadBalancer/MetalLB VIP is a virtual address, not a real host on
+# the broadcast domain, so it never sees that query and LAN clients get "Game server not found"
+# even though the VIP is otherwise fully reachable (direct unicast, e.g. a WAN IP, works fine).
+# hostNetwork avoids this by making the node's real LAN IP the thing clients connect to, same as
+# running the upstream image directly with `docker run --network host`. When enabling this,
+# service.type should usually be ClusterIP instead of LoadBalancer, since the ports are already
+# exposed on the node and a MetalLB VIP would just reintroduce the same broadcast problem.
+hostNetwork: false
+# dnsPolicy for the pod. Only takes effect when hostNetwork is true (Kubernetes otherwise
+# defaults appropriately on its own); "ClusterFirstWithHostNet" is required for in-cluster DNS
+# (e.g. the setup initContainer, or coredns lookups) to keep working under hostNetwork.
+dnsPolicy: ""
+
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little

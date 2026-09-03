@@ -53,6 +53,8 @@ Common settings to override via `--set` or a values file:
 | `service.type` | `LoadBalancer` or `ClusterIP` | `LoadBalancer` |
 | `service.ports.game` / `.query` / `.blobSync` | UDP ports (`GamePort`/`QueryPort`/`BlobSyncPort`) | `8766` / `27016` / `9700` |
 | `service.loadBalancerIP` | Pin a specific IP when `service.type` is `LoadBalancer` (e.g. a MetalLB address) | `""` (auto-assigned) |
+| `hostNetwork` | Bind `service.ports` directly on the node instead of a pod IP. Needed for LAN clients: the SOTF client broadcasts its "Direct Connect" query to `255.255.255.255` for RFC1918 addresses instead of unicasting to the IP you typed, which a LoadBalancer/MetalLB VIP never sees since it isn't a real host on the broadcast domain. Use `service.type: ClusterIP` alongside this instead of `LoadBalancer` | `false` |
+| `dnsPolicy` | Pod DNS policy; only meaningful with `hostNetwork: true`, where it defaults to `ClusterFirstWithHostNet` to keep in-cluster DNS working | `""` (Kubernetes default) |
 | `paths.gamePath` / `.userDataDir` | Where the game is installed / its userdata subdirectory; also set as the `GAME_PATH`/`GAME_USERDATA_PATH`/`GAME_CONFIGFILE_PATH` env vars so the volume mount and the server always agree | `/sonsoftheforest` / `userdata` |
 | `persistence.enabled` / `.size` / `.storageClassName` | Storage for `paths.gamePath` | `true` / `20Gi` / `""` |
 | `persistence.existingClaim` | Reuse an existing PVC instead of creating one | `""` |
