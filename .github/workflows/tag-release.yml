@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: tag-release
@@ -32,6 +33,19 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch
           tag_prefix: v
+
+      # A tag pushed using the default GITHUB_TOKEN does not trigger other workflows'
+      # `on: push` events (GitHub suppresses that to avoid recursive runs), so
+      # publish-chart.yml would never fire on its own. workflow_dispatch is exempt from
+      # that suppression, so dispatch it explicitly instead of relying on the tag push.
+      - name: Trigger chart publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run publish-chart.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f tag="${{ steps.tag_version.outputs.new_tag }}"
 
       - name: Summary
         run: |
